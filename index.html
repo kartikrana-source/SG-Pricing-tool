@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Internal Pricing Tool</title>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    padding: 30px;
+    background: #f4f6f8;
+}
+h2 { margin-bottom: 20px; }
+
+input {
+    padding: 8px;
+    margin-right: 10px;
+    width: 300px;
+}
+
+button {
+    padding: 8px 15px;
+    cursor: pointer;
+    margin-right: 10px;
+}
+
+#loader {
+    margin-top: 20px;
+    font-weight: bold;
+    color: #007bff;
+}
+
+pre {
+    margin-top: 20px;
+    padding: 15px;
+    background: #1e1e1e;
+    color: #00ff90;
+    max-height: 500px;
+    overflow: auto;
+    border-radius: 5px;
+}
+
+.debug-info {
+    margin-top: 10px;
+    padding: 10px;
+    background: #fff3cd;
+    border-left: 4px solid #ffc107;
+    font-size: 14px;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Internal Pricing Tool</h2>
+
+<input type="text" id="outletCode" placeholder="Enter Outlet Code">
+<input type="text" id="token" placeholder="Enter Bearer Token (without Bearer)">
+<button onclick="fetchData()">Fetch Pricing</button>
+<button onclick="copyJson()">Copy JSON</button>
+
+<div id="loader" style="display:none;">Loading...</div>
+<div id="debugInfo" class="debug-info" style="display:none;"></div>
+<pre id="jsonOutput"></pre>
+
+<script>
+
+const BASE_PRICE_API =
+"https://demo.salescode.ai/productmetadata/v1/items/pricing?size=10000&page=0&appType=pwa&appVersion=10000.1.0&source=app";
+
+const PRODUCT_API =
+"https://demo.salescode.ai/products?size=10000&page=0&minimalResponse=true&filter=activeStatus:active&appType=pwa&appVersion=10000.1.0&source=app";
+
+
+/* ========= EXTRACTOR ========= */
+function extractArray(data, label) {
+
+    if (!data) return [];
+
+    if (Array.isArray(data)) return data;
+
+    if (Array.isArray(data.features)) {
+        console.log(`[${label}] Extracted from features (${data.features.length})`);
+        return data.features;
+    }
+
+    const wrappers = [
+        'content',
+        'data',
+        'items',
+        'results',
+        'products',
+        'pricing',
+        'records'
+    ];
+
+    for (const key of wrappers) {
+        if (Array.isArray(data[key])) {
+            console.log(`[${label}] Extracted from ${key} (${data[key].length})`);
+            return data[key];
+        }
+    }
+
+    return [];
+}
+
+
+/* ========= MAP BUILDER ========= */
+function buildMap(arr) {
+    const map = {};
+    arr.forEach(item => {
+        const sku = String(item.skuCode || item.batchCode || item.id || '').trim();
+        if (sku) map[sku] = item;
+    });
+    return map;
+}
+
+
+async function fetchData() {
+
+    const outletCode = document.getElementById("outletCode").value.trim();
+    const token = document.getElementById("token").value.trim();
+
+    if (!outletCode || !token) {
+        alert("Please enter outlet code and token.");
+        return;
+    }
+
+    document.getElementById("loader").style.display = "block";
+    document.getElementById("jsonOutput").textContent = "";
+    document.getElementById("debugInfo").style.display = "none";
+
+    const PRICING_ADJUSTMENT_API =
+        `https://demo.salescode.ai/v1/getPricingConditions/${outletCode}?appType=pwa&appVersion=10000.1.0&source=app`;
+
+    const headers = {
+        "Authorization": `Bearer ${token}`
+    };
+
+    try {
+
+        // ✅ VERCEL SERVERLESS PROXY
+        const [productRes, basePriceRes, adjustmentRes] = await Promise.all([
+            fetch(`/api/proxy?url=${encodeURIComponent(PRODUCT_API)}`, { headers }),
+            fetch(`/api/proxy?url=${encodeURIComponent(BASE_PRICE_API)}`, { headers }),
+            fetch(`/api/proxy?url=${encodeURIComponent(PRICING_ADJUSTMENT_API)}`, { headers })
+        ]);
+
+        if (!productRes.ok || !basePriceRes.ok || !adjustmentRes.ok) {
+            throw new Error("One or more API calls failed.");
+        }
+
+        const productsData = await productRes.json();
+        const basePriceData = await basePriceRes.json();
+        const adjustmentData = await adjustmentRes.json();
+
+        const products = extractArray(productsData, "Products");
+        const prices = extractArray(basePriceData, "BasePrice");
+        const adjustments = extractArray(adjustmentData, "Adjustments");
+
+        if (!prices.length) {
+            throw new Error("Base Pricing API returned empty list.");
+        }
+
+        const productMap = buildMap(products);
+        const priceMap = buildMap(prices);
+        const adjustmentMap = buildMap(adjustments);
+
+        /* ========= BASE PRICE AS MASTER ========= */
+        const finalResult = Object.keys(priceMap).map(sku => ({
+            skuCode: sku,
+            productMetadata: productMap[sku] || null,
+            basePricing: priceMap[sku],
+            adjustment: adjustmentMap[sku] || null
+        }));
+
+        /* ========= DEBUG ========= */
+        const debugMsg = `
+API Counts:
+• Products: ${products.length}
+• Base Prices: ${prices.length}
+• Adjustments: ${adjustments.length}
+
+Final SKUs (from Base Pricing): ${finalResult.length}
+        `;
+
+        document.getElementById("debugInfo").textContent = debugMsg;
+        document.getElementById("debugInfo").style.display = "block";
+
+        document.getElementById("jsonOutput").textContent =
+            JSON.stringify(finalResult, null, 2);
+
+    } catch (error) {
+
+        document.getElementById("jsonOutput").textContent =
+            `❌ Error: ${error.message}`;
+
+        document.getElementById("debugInfo").textContent =
+            `⚠ ${error.message}`;
+
+        document.getElementById("debugInfo").style.display = "block";
+    }
+
+    document.getElementById("loader").style.display = "none";
+}
+
+
+function copyJson() {
+    const jsonText = document.getElementById("jsonOutput").textContent;
+
+    if (!jsonText || jsonText.startsWith('❌')) {
+        alert("No valid JSON to copy.");
+        return;
+    }
+
+    navigator.clipboard.writeText(jsonText);
+    alert("JSON copied to clipboard!");
+}
+
+</script>
+
+</body>
+</html>
