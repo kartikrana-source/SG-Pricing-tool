@@ -5,63 +5,159 @@
 <title>Internal Pricing Tool</title>
 
 <style>
-body {
-    font-family: Arial, sans-serif;
-    padding: 30px;
-    background: #f4f6f8;
+
+* {
+    box-sizing: border-box;
 }
-h2 { margin-bottom: 20px; }
+
+body {
+    font-family: "Segoe UI", sans-serif;
+    margin: 0;
+    padding: 40px;
+    background: #f5f7fb;
+}
+
+/* ===== Card Container ===== */
+.container {
+    max-width: 1200px;
+    margin: auto;
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+}
+
+h2 {
+    margin-top: 0;
+    margin-bottom: 25px;
+    font-weight: 600;
+    color: #222;
+}
+
+/* ===== Form ===== */
+.form-row {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
 
 input {
-    padding: 8px;
-    margin-right: 10px;
-    width: 300px;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    width: 280px;
+    transition: 0.2s ease;
 }
 
+input:focus {
+    outline: none;
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79,70,229,0.15);
+}
+
+/* ===== Buttons ===== */
 button {
-    padding: 8px 15px;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
     cursor: pointer;
-    margin-right: 10px;
+    font-weight: 500;
+    transition: 0.2s ease;
 }
 
+.primary-btn {
+    background: linear-gradient(90deg, #4f46e5, #6366f1);
+    color: white;
+}
+
+.primary-btn:hover {
+    opacity: 0.9;
+}
+
+.secondary-btn {
+    background: #e5e7eb;
+}
+
+.secondary-btn:hover {
+    background: #d1d5db;
+}
+
+/* ===== Loader ===== */
 #loader {
-    margin-top: 20px;
-    font-weight: bold;
-    color: #007bff;
+    margin-top: 15px;
+    font-weight: 500;
+    color: #4f46e5;
 }
 
-pre {
+/* ===== Debug ===== */
+.debug-info {
     margin-top: 20px;
     padding: 15px;
-    background: #1e1e1e;
-    color: #00ff90;
-    max-height: 500px;
-    overflow: auto;
-    border-radius: 5px;
-}
-
-.debug-info {
-    margin-top: 10px;
-    padding: 10px;
-    background: #fff3cd;
-    border-left: 4px solid #ffc107;
+    background: #fef9c3;
+    border-radius: 6px;
     font-size: 14px;
 }
+
+/* ===== JSON Output ===== */
+.json-container {
+    margin-top: 25px;
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 20px;
+    border: 1px solid #e5e7eb;
+    max-height: 600px;
+    overflow: auto;
+    font-family: monospace;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+/* Syntax Highlighting */
+.key {
+    color: #dc2626; /* Red */
+    font-weight: 600;
+}
+
+.string {
+    color: #2563eb; /* Blue */
+}
+
+.number {
+    color: #2563eb;
+}
+
+.boolean {
+    color: #2563eb;
+}
+
+.null {
+    color: #9ca3af;
+}
+
 </style>
 </head>
 
 <body>
 
+<div class="container">
+
 <h2>Internal Pricing Tool</h2>
 
-<input type="text" id="outletCode" placeholder="Enter Outlet Code">
-<input type="text" id="token" placeholder="Enter Bearer Token (without Bearer)">
-<button onclick="fetchData()">Fetch Pricing</button>
-<button onclick="copyJson()">Copy JSON</button>
+<div class="form-row">
+    <input type="text" id="outletCode" placeholder="Enter Outlet Code">
+    <input type="text" id="token" placeholder="Enter Bearer Token">
+    <button class="primary-btn" onclick="fetchData()">Fetch Pricing</button>
+    <button class="secondary-btn" onclick="copyJson()">Copy JSON</button>
+</div>
 
-<div id="loader" style="display:none;">Loading...</div>
+<div id="loader" style="display:none;">Loading data...</div>
 <div id="debugInfo" class="debug-info" style="display:none;"></div>
-<pre id="jsonOutput"></pre>
+<div id="jsonOutput" class="json-container"></div>
+
+</div>
 
 <script>
 
@@ -72,40 +168,39 @@ const PRODUCT_API =
 "https://demo.salescode.ai/products?size=10000&page=0&minimalResponse=true&filter=activeStatus:active&appType=pwa&appVersion=10000.1.0&source=app";
 
 
-/* ========= EXTRACTOR ========= */
-function extractArray(data, label) {
-
-    if (!data) return [];
-
-    if (Array.isArray(data)) return data;
-
-    if (Array.isArray(data.features)) {
-        console.log(`[${label}] Extracted from features (${data.features.length})`);
-        return data.features;
-    }
-
-    const wrappers = [
-        'content',
-        'data',
-        'items',
-        'results',
-        'products',
-        'pricing',
-        'records'
-    ];
-
-    for (const key of wrappers) {
-        if (Array.isArray(data[key])) {
-            console.log(`[${label}] Extracted from ${key} (${data[key].length})`);
-            return data[key];
+function syntaxHighlight(json) {
+    json = JSON.stringify(json, null, 2);
+    json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|\b\d+\b)/g, function (match) {
+        let cls = 'number';
+        if (/^"/.test(match)) {
+            if (/:$/.test(match)) {
+                cls = 'key';
+            } else {
+                cls = 'string';
+            }
+        } else if (/true|false/.test(match)) {
+            cls = 'boolean';
+        } else if (/null/.test(match)) {
+            cls = 'null';
         }
-    }
-
-    return [];
+        return '<span class="' + cls + '">' + match + '</span>';
+    });
 }
 
 
-/* ========= MAP BUILDER ========= */
+function extractArray(data) {
+    if (!data) return [];
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data.features)) return data.features;
+
+    const wrappers = ['content','data','items','results','products','pricing','records'];
+    for (const key of wrappers) {
+        if (Array.isArray(data[key])) return data[key];
+    }
+    return [];
+}
+
 function buildMap(arr) {
     const map = {};
     arr.forEach(item => {
@@ -114,7 +209,6 @@ function buildMap(arr) {
     });
     return map;
 }
-
 
 async function fetchData() {
 
@@ -127,46 +221,30 @@ async function fetchData() {
     }
 
     document.getElementById("loader").style.display = "block";
-    document.getElementById("jsonOutput").textContent = "";
+    document.getElementById("jsonOutput").innerHTML = "";
     document.getElementById("debugInfo").style.display = "none";
 
     const PRICING_ADJUSTMENT_API =
         `https://demo.salescode.ai/v1/getPricingConditions/${outletCode}?appType=pwa&appVersion=10000.1.0&source=app`;
 
-    const headers = {
-        "Authorization": `Bearer ${token}`
-    };
+    const headers = { "Authorization": `Bearer ${token}` };
 
     try {
 
-        // ✅ VERCEL SERVERLESS PROXY
         const [productRes, basePriceRes, adjustmentRes] = await Promise.all([
             fetch(`/api/proxy?url=${encodeURIComponent(PRODUCT_API)}`, { headers }),
             fetch(`/api/proxy?url=${encodeURIComponent(BASE_PRICE_API)}`, { headers }),
             fetch(`/api/proxy?url=${encodeURIComponent(PRICING_ADJUSTMENT_API)}`, { headers })
         ]);
 
-        if (!productRes.ok || !basePriceRes.ok || !adjustmentRes.ok) {
-            throw new Error("One or more API calls failed.");
-        }
-
-        const productsData = await productRes.json();
-        const basePriceData = await basePriceRes.json();
-        const adjustmentData = await adjustmentRes.json();
-
-        const products = extractArray(productsData, "Products");
-        const prices = extractArray(basePriceData, "BasePrice");
-        const adjustments = extractArray(adjustmentData, "Adjustments");
-
-        if (!prices.length) {
-            throw new Error("Base Pricing API returned empty list.");
-        }
+        const products = extractArray(await productRes.json());
+        const prices = extractArray(await basePriceRes.json());
+        const adjustments = extractArray(await adjustmentRes.json());
 
         const productMap = buildMap(products);
         const priceMap = buildMap(prices);
         const adjustmentMap = buildMap(adjustments);
 
-        /* ========= BASE PRICE AS MASTER ========= */
         const finalResult = Object.keys(priceMap).map(sku => ({
             skuCode: sku,
             productMetadata: productMap[sku] || null,
@@ -174,47 +252,26 @@ async function fetchData() {
             adjustment: adjustmentMap[sku] || null
         }));
 
-        /* ========= DEBUG ========= */
-        const debugMsg = `
-API Counts:
-• Products: ${products.length}
-• Base Prices: ${prices.length}
-• Adjustments: ${adjustments.length}
-
-Final SKUs (from Base Pricing): ${finalResult.length}
-        `;
-
-        document.getElementById("debugInfo").textContent = debugMsg;
-        document.getElementById("debugInfo").style.display = "block";
-
-        document.getElementById("jsonOutput").textContent =
-            JSON.stringify(finalResult, null, 2);
-
-    } catch (error) {
-
-        document.getElementById("jsonOutput").textContent =
-            `❌ Error: ${error.message}`;
+        document.getElementById("jsonOutput").innerHTML =
+            syntaxHighlight(finalResult);
 
         document.getElementById("debugInfo").textContent =
-            `⚠ ${error.message}`;
+            `Products: ${products.length} | Base Prices: ${prices.length} | Adjustments: ${adjustments.length}`;
 
         document.getElementById("debugInfo").style.display = "block";
+
+    } catch (error) {
+        document.getElementById("jsonOutput").innerHTML =
+            `<span style="color:red;">Error: ${error.message}</span>`;
     }
 
     document.getElementById("loader").style.display = "none";
 }
 
-
 function copyJson() {
-    const jsonText = document.getElementById("jsonOutput").textContent;
-
-    if (!jsonText || jsonText.startsWith('❌')) {
-        alert("No valid JSON to copy.");
-        return;
-    }
-
-    navigator.clipboard.writeText(jsonText);
-    alert("JSON copied to clipboard!");
+    const text = document.getElementById("jsonOutput").innerText;
+    navigator.clipboard.writeText(text);
+    alert("Copied!");
 }
 
 </script>
