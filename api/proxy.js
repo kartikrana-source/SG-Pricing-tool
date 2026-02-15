@@ -15,6 +15,35 @@ function isAllowedDomain(url) {
 
 const SIGNIN_URL = "https://demo.salescode.ai/signin?lob=simasgdemo";
 
+async function readJsonBody(req) {
+  if (req.body && typeof req.body === "object") {
+    return req.body;
+  }
+
+  if (typeof req.body === "string") {
+    try {
+      return JSON.parse(req.body);
+    } catch (err) {
+      return {};
+    }
+  }
+
+  let rawBody = "";
+  for await (const chunk of req) {
+    rawBody += chunk;
+  }
+
+  if (!rawBody) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(rawBody);
+  } catch (err) {
+    return {};
+  }
+}
+
 function getSigninPayload(options = {}) {
   const loginIdOverride =
     typeof options.loginIdOverride === "string"
@@ -26,8 +55,18 @@ function getSigninPayload(options = {}) {
     process.env.DEMO_LOGIN_PASSWORD || process.env.LOGIN_PASSWORD;
   const lob = process.env.DEMO_LOB || process.env.LOB || "simasgdemo";
 
-  if (!loginId || !password) {
-    return null;
+  if (!loginId) {
+    return {
+      error:
+        "Missing signin loginId. Provide outletCode/loginId in request or set DEMO_LOGIN_ID (or LOGIN_ID).",
+    };
+  }
+
+  if (!password) {
+    return {
+      error:
+        "Missing signin password. Set DEMO_LOGIN_PASSWORD (or LOGIN_PASSWORD) in Vercel environment variables.",
+    };
   }
 
   return {
@@ -41,17 +80,15 @@ function getSigninPayload(options = {}) {
 export default async function handler(req, res) {
   try {
     if (req.method === "POST" && req.query.action === "signin") {
-      const requestBody =
-        req.body && typeof req.body === "object" ? req.body : {};
+      const requestBody = await readJsonBody(req);
       const signinPayload = getSigninPayload({
         loginIdOverride: requestBody.outletCode || requestBody.loginId,
       });
 
-      if (!signinPayload) {
+      if (signinPayload.error) {
         return res.status(500).json({
           error: "Missing signin configuration",
-          details:
-            "Provide outletCode/loginId in request or set DEMO_LOGIN_ID (or LOGIN_ID), and set DEMO_LOGIN_PASSWORD (or LOGIN_PASSWORD).",
+          details: signinPayload.error,
         });
       }
 
