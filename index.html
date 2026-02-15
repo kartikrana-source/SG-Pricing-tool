@@ -113,28 +113,7 @@ button {
     font-family: monospace;
     font-size: 13px;
     line-height: 1.6;
-}
-
-/* Syntax Highlighting */
-.key {
-    color: #dc2626; /* Red */
-    font-weight: 600;
-}
-
-.string {
-    color: #2563eb; /* Blue */
-}
-
-.number {
-    color: #2563eb;
-}
-
-.boolean {
-    color: #2563eb;
-}
-
-.null {
-    color: #9ca3af;
+    white-space: pre;
 }
 
 </style>
@@ -168,24 +147,11 @@ const PRODUCT_API =
 "https://demo.salescode.ai/products?size=10000&page=0&minimalResponse=true&filter=activeStatus:active&appType=pwa&appVersion=10000.1.0&source=app";
 
 
-function syntaxHighlight(json) {
-    json = JSON.stringify(json, null, 2);
-    json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|\b\d+\b)/g, function (match) {
-        let cls = 'number';
-        if (/^"/.test(match)) {
-            if (/:$/.test(match)) {
-                cls = 'key';
-            } else {
-                cls = 'string';
-            }
-        } else if (/true|false/.test(match)) {
-            cls = 'boolean';
-        } else if (/null/.test(match)) {
-            cls = 'null';
-        }
-        return '<span class="' + cls + '">' + match + '</span>';
-    });
+let latestJsonOutput = "";
+
+function renderJson(data) {
+    latestJsonOutput = JSON.stringify(data, null, 2);
+    document.getElementById("jsonOutput").textContent = latestJsonOutput;
 }
 
 
@@ -226,8 +192,9 @@ async function fetchData() {
     }
 
     document.getElementById("loader").style.display = "block";
-    document.getElementById("jsonOutput").innerHTML = "";
+    document.getElementById("jsonOutput").textContent = "";
     document.getElementById("debugInfo").style.display = "none";
+    latestJsonOutput = "";
 
     const PRICING_ADJUSTMENT_API =
         `https://demo.salescode.ai/v1/getPricingConditions/${outletCode}?appType=pwa&appVersion=10000.1.0&source=app`;
@@ -260,8 +227,7 @@ async function fetchData() {
             adjustment: adjustmentMap[sku] || null
         }));
 
-        document.getElementById("jsonOutput").innerHTML =
-            syntaxHighlight(finalResult);
+        renderJson(finalResult);
 
         document.getElementById("debugInfo").textContent =
             `Products: ${products.length} | Base Prices: ${prices.length} | Adjustments: ${adjustments.length}`;
@@ -269,15 +235,15 @@ async function fetchData() {
         document.getElementById("debugInfo").style.display = "block";
 
     } catch (error) {
-        document.getElementById("jsonOutput").innerHTML =
-            `<span style="color:red;">Error: ${error.message}</span>`;
+        document.getElementById("jsonOutput").textContent =
+            `Error: ${error.message}`;
     }
 
     document.getElementById("loader").style.display = "none";
 }
 
 function copyJson() {
-    const text = document.getElementById("jsonOutput").innerText;
+    const text = latestJsonOutput || document.getElementById("jsonOutput").textContent;
     navigator.clipboard.writeText(text);
     alert("Copied!");
 }
