@@ -226,7 +226,11 @@ async function fetchData() {
         `https://demo.salescode.ai/v1/getPricingConditions/${outletCode}?appType=pwa&appVersion=10000.1.0&source=app`;
 
     try {
-        const signinRes = await fetch("/api/proxy?action=signin", { method: "POST" });
+        const signinRes = await fetch("/api/proxy?action=signin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ outletCode })
+        });
         const signinData = await signinRes.json();
         const token = signinData?.token;
 
