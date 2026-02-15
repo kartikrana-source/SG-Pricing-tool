@@ -148,6 +148,7 @@ button {
 
 <div class="form-row">
     <input type="text" id="outletCode" placeholder="Enter Outlet Code">
+    <input type="text" id="authToken" placeholder="Paste Bearer Token">
     <button class="primary-btn" onclick="fetchData()">Fetch Pricing</button>
     <button class="secondary-btn" onclick="copyJson()">Copy JSON</button>
 </div>
@@ -212,9 +213,15 @@ function buildMap(arr) {
 async function fetchData() {
 
     const outletCode = document.getElementById("outletCode").value.trim();
+    const authToken = document.getElementById("authToken").value.trim();
 
     if (!outletCode) {
         alert("Please enter outlet code.");
+        return;
+    }
+
+    if (!authToken) {
+        alert("Please paste token.");
         return;
     }
 
@@ -226,19 +233,7 @@ async function fetchData() {
         `https://demo.salescode.ai/v1/getPricingConditions/${outletCode}?appType=pwa&appVersion=10000.1.0&source=app`;
 
     try {
-        const signinRes = await fetch("/api/proxy?action=signin", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ outletCode })
-        });
-        const signinData = await signinRes.json();
-        const token = signinData?.token;
-
-        if (!signinRes.ok || !token) {
-            throw new Error("Signin failed. Unable to fetch token.");
-        }
-
-        const headers = { "Authorization": `Bearer ${token}` };
+        const headers = { "Authorization": `Bearer ${authToken}` };
 
         const [productRes, basePriceRes, adjustmentRes] = await Promise.all([
             fetch(`/api/proxy?url=${encodeURIComponent(PRODUCT_API)}`, { headers }),
