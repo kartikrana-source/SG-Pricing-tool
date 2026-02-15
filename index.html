@@ -148,7 +148,6 @@ button {
 
 <div class="form-row">
     <input type="text" id="outletCode" placeholder="Enter Outlet Code">
-    <input type="text" id="token" placeholder="Enter Bearer Token">
     <button class="primary-btn" onclick="fetchData()">Fetch Pricing</button>
     <button class="secondary-btn" onclick="copyJson()">Copy JSON</button>
 </div>
@@ -213,10 +212,9 @@ function buildMap(arr) {
 async function fetchData() {
 
     const outletCode = document.getElementById("outletCode").value.trim();
-    const token = document.getElementById("token").value.trim();
 
-    if (!outletCode || !token) {
-        alert("Please enter outlet code and token.");
+    if (!outletCode) {
+        alert("Please enter outlet code.");
         return;
     }
 
@@ -227,15 +225,26 @@ async function fetchData() {
     const PRICING_ADJUSTMENT_API =
         `https://demo.salescode.ai/v1/getPricingConditions/${outletCode}?appType=pwa&appVersion=10000.1.0&source=app`;
 
-    const headers = { "Authorization": `Bearer ${token}` };
-
     try {
+        const signinRes = await fetch("/api/proxy?action=signin", { method: "POST" });
+        const signinData = await signinRes.json();
+        const token = signinData?.token;
+
+        if (!signinRes.ok || !token) {
+            throw new Error("Signin failed. Unable to fetch token.");
+        }
+
+        const headers = { "Authorization": `Bearer ${token}` };
 
         const [productRes, basePriceRes, adjustmentRes] = await Promise.all([
             fetch(`/api/proxy?url=${encodeURIComponent(PRODUCT_API)}`, { headers }),
             fetch(`/api/proxy?url=${encodeURIComponent(BASE_PRICE_API)}`, { headers }),
             fetch(`/api/proxy?url=${encodeURIComponent(PRICING_ADJUSTMENT_API)}`, { headers })
         ]);
+
+        if (!productRes.ok || !basePriceRes.ok || !adjustmentRes.ok) {
+            throw new Error("Failed to fetch one or more pricing endpoints.");
+        }
 
         const products = extractArray(await productRes.json());
         const prices = extractArray(await basePriceRes.json());
