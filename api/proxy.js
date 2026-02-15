@@ -14,28 +14,48 @@ function isAllowedDomain(url) {
 }
 
 const SIGNIN_URL = "https://demo.salescode.ai/signin?lob=simasgdemo";
-const SIGNIN_PAYLOAD = {
-  loginId: process.env.DEMO_LOGIN_ID || "integration_user",
-  password:
-    process.env.DEMO_LOGIN_PASSWORD ||
-    "NPa4p4ho4zqWeSDSKPx/FvAskPKAJR6mquvU2WG8bJHxJ9DlnOkmPF0oGocwOCCWBnj+gqNV/eQREh9T4b/d2hC2s6H6VCTOCIwLnQLhIdw9DM7f2wUjqQ6qB9bRKha42tNoYp44uUzCFRFt2Rv7+IgGHWmVFZNivs32KNJ4QII=",
-  unlimitedExpiry: false,
-  lob: process.env.DEMO_LOB || "simasgdemo",
-};
+
+function getSigninPayload() {
+  const loginId = process.env.DEMO_LOGIN_ID || process.env.LOGIN_ID;
+  const password =
+    process.env.DEMO_LOGIN_PASSWORD || process.env.LOGIN_PASSWORD;
+  const lob = process.env.DEMO_LOB || process.env.LOB || "simasgdemo";
+
+  if (!loginId || !password) {
+    return null;
+  }
+
+  return {
+    loginId,
+    password,
+    unlimitedExpiry: false,
+    lob,
+  };
+}
 
 export default async function handler(req, res) {
   try {
     if (req.method === "POST" && req.query.action === "signin") {
+      const signinPayload = getSigninPayload();
+
+      if (!signinPayload) {
+        return res.status(500).json({
+          error: "Missing signin configuration",
+          details:
+            "Set DEMO_LOGIN_ID and DEMO_LOGIN_PASSWORD (or LOGIN_ID and LOGIN_PASSWORD).",
+        });
+      }
+
       const signinResponse = await axios({
         method: "POST",
         url: SIGNIN_URL,
         headers: {
-          lob: SIGNIN_PAYLOAD.lob,
+          lob: signinPayload.lob,
           Accept: "application/json, text/plain, */*",
           "Content-Type": "application/json;charset=UTF-8",
           "User-Agent": "Mozilla/5.0",
         },
-        data: SIGNIN_PAYLOAD,
+        data: signinPayload,
         timeout: 20000,
       });
 
